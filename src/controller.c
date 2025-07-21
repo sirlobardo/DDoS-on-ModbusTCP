@@ -53,8 +53,8 @@ typedef struct {
 } Parametros;
 
 int criar_socket();
-void conectar_servidor(int sock, const char *ip, int porta, struct sockaddr_in *server_addr);
-void enviar_pacote(int sock, Parametros *p);
+int conectar_servidor(int sock, const char *ip, int porta, struct sockaddr_in *server_addr);
+int enviar_pacote(int sock, Parametros *p);
 int ler_config(const char *filename, Parametros *p, char ***hosts, int *numHosts);
 // uint64_t get_current_time_ms();
 // void preencher_tab_reg_aleatorio(uint8_t *tab_reg, size_t tamanho);
@@ -63,7 +63,7 @@ int main() {
     Parametros p;
     char **hostAttackers = NULL;
     // int numAttackers = 0, rslt;
-    int numAttackers = 0;
+    int numAttackers = 0, sock;
     // modbus_t *ctx;
     // uint8_t tab_reg[coils];
     // uint64_t startExecTime = get_current_time_ms();
@@ -73,16 +73,33 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    for(int i = 0; i < numAttackers; i++) {
-        int sock;
+    for (int i = 0; i < numAttackers; i++) {
         struct sockaddr_in server;
 
-        sock = criar_socket();
-        conectar_servidor(sock, hostAttackers[i], 12345, &server);
-        enviar_pacote(sock, &p);
+        while ((sock = criar_socket()) < 0) {
+            perror("Erro ao criar socket. Tentando novamente...");
+            sleep(1); // evita uso excessivo da CPU
+        }
+
+        while (conectar_servidor(sock, hostAttackers[i], 12345, &server) < 0) {
+            perror("Erro ao conectar com o servidor. Tentando novamente...");
+            close(sock); // fecha socket antes de tentar novamente
+            sleep(1);
+            while ((sock = criar_socket()) < 0) {
+                perror("Erro ao recriar socket após falha de conexão. Tentando novamente...");
+                sleep(1);
+            }
+        }
+
+        while (enviar_pacote(sock, &p) < 0) {
+            perror("Erro ao enviar pacote. Tentando novamente...");
+            sleep(1);
+        }
+
         close(sock);
         free(hostAttackers[i]);
     }
+
     free(hostAttackers);
     printf("Pacotes enviados com sucesso para todos os atacantes.\n");
     
@@ -142,37 +159,37 @@ int criar_socket() {
     return sock;
 }
 
-void conectar_servidor(int sock, const char *ip, int porta, struct sockaddr_in *server_addr) {
+int conectar_servidor(int sock, const char *ip, int porta, struct sockaddr_in *server_addr) {
     memset(server_addr, 0, sizeof(*server_addr));
     server_addr->sin_family = AF_INET;
     server_addr->sin_port = htons(porta);
 
     if (inet_pton(AF_INET, ip, &server_addr->sin_addr) <= 0) {
         perror("Erro ao converter endereço IP");
-        close(sock);
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     if (connect(sock, (struct sockaddr *)server_addr, sizeof(*server_addr)) < 0) {
         perror("Erro ao conectar");
-        close(sock);
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     printf("Conectado a %s:%d\n", ip, porta);
+    return 0;
 }
 
-void enviar_pacote(int sock, Parametros *p) {
+int enviar_pacote(int sock, Parametros *p) {
     ssize_t enviados = send(sock, p, sizeof(Parametros), 0);
     if (enviados < 0) {
         perror("Erro ao enviar struct");
-        close(sock);
-        exit(EXIT_FAILURE);
+        return -1;
     } else if ((size_t)enviados < sizeof(Parametros)) {
         fprintf(stderr, "Aviso: struct enviada parcialmente (%zd de %zu bytes)\n",
                 enviados, sizeof(Parametros));
+        return -1;
     } else {
         printf("Struct enviada com sucesso.\n");
+        return 0;
     }
 }
 
