@@ -1,0 +1,7 @@
+{
+  "config": {
+    "portaServidor": 12345,
+    "portaModbus": 502,
+    "coils": 30
+  }
+}

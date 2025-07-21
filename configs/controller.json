@@ -1,0 +1,13 @@
+{
+  "parametros": {
+    "targetHost": "192.168.68.101",
+    "startTime": 5000000,
+    "floodingPeriod": 20000000,
+    "timeoutAtk": 500000,
+    "delayBtwRequestsAtk": 1,
+    "operation": "WRITE"
+  },
+  "hostAttackers": [
+    "127.0.0.1"
+  ]
+}

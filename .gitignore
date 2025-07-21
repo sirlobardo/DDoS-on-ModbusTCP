@@ -1,0 +1,102 @@
+# Created by https://www.toptal.com/developers/gitignore/api/c
+# Edit at https://www.toptal.com/developers/gitignore?templates=c
+
+### C ###
+# Prerequisites
+*.d
+
+# Object files
+*.o
+*.ko
+*.obj
+*.elf
+
+# Linker output
+*.ilk
+*.map
+*.exp
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Kernel Module Compile Results
+*.mod*
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Mkfile.old
+dkms.conf
+
+### Visual Studio Code ###
+.vscode/
+.history/
+*.code-workspace
+*.code-workspace.backup
+.vscode-backup/
+.vscode-oss/
+
+# VSCode extensions: CMake Tools
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+build/
+compile_commands.json
+
+# VSCode extension: Code Runner
+*.log
+output
+
+### Make ###
+*.d
+*.dep
+*.cmd
+*.mk
+*.mod.c
+*.order
+*.symvers
+*.tmp
+*.a.out
+*.bin
+*.map
+*.lst
+*.srec
+*.d.*
+
+# Diretórios comuns de build
+build/
+Build/
+bin/
+
+### Configs ###
+**/config.json
+
+# End of .gitignore
