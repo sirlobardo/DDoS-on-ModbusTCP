@@ -17,8 +17,7 @@
  * Você deve ter recebido uma cópia da Licença Pública Geral GNU
  * junto com este programa. Se não, veja <https://www.gnu.org/licenses/>.
  */
-
-#define _POSIX_C_SOURCE 199309L
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,9 +26,9 @@
 #include <arpa/inet.h>
 #include <cjson/cJSON.h>
 #include <errno.h>
-// #include <time.h>
-// #include <fcntl.h>    
-// #include <unistd.h>   
+#include <time.h>
+#include <fcntl.h>    
+#include <unistd.h>   
 
 #pragma pack(1)
 
@@ -37,6 +36,12 @@
 #define TARGET_HOST_MAXLEN 20
 // #define TRUE 1
 // #define BIT_MASK 0x01
+
+typedef struct {
+    int portaServidor;
+    int portaModbus;
+    int coils;
+} Config;
 
 typedef enum {
     READ,
@@ -55,23 +60,27 @@ typedef struct {
 int criar_socket();
 int conectar_servidor(int sock, const char *ip, int porta, struct sockaddr_in *server_addr);
 int enviar_pacote(int sock, Parametros *p);
-int ler_config(const char *filename, Parametros *p, char ***hosts, int *numHosts);
+int ler_config(const char *filename, Config *cfg, Parametros *p, char ***hosts, int *numHosts);
 // uint64_t get_current_time_ms();
 // void preencher_tab_reg_aleatorio(uint8_t *tab_reg, size_t tamanho);
 
 int main() {
     Parametros p;
+    Config cfg;
     char **hostAttackers = NULL;
-    // int numAttackers = 0, rslt;
-    int numAttackers = 0, sock;
-    // modbus_t *ctx;
-    // uint8_t tab_reg[coils];
-    // uint64_t startExecTime = get_current_time_ms();
+    int numAttackers = 0, sock, rslt;
 
-    if (ler_config("../configs/controller.json", &p, &hostAttackers, &numAttackers) != 0) {
+    if (ler_config("../configs/controller.json", &cfg, &p, &hostAttackers, &numAttackers) != 0) {
         fprintf(stderr, "Erro ao ler configuração do arquivo JSON.\n");
         return EXIT_FAILURE;
     }
+
+
+    // modbus_t *ctx;
+    // uint8_t tab_reg[cfg.coils];
+    // uint64_t startExecTime = get_current_time_ms();
+
+
 
     for (int i = 0; i < numAttackers; i++) {
         struct sockaddr_in server;
@@ -81,9 +90,9 @@ int main() {
             sleep(1); // evita uso excessivo da CPU
         }
 
-        while (conectar_servidor(sock, hostAttackers[i], 12345, &server) < 0) {
+        while (conectar_servidor(sock, hostAttackers[i], cfg.portaServidor, &server) < 0) {
             perror("Erro ao conectar com o servidor. Tentando novamente...");
-            close(sock); // fecha socket antes de tentar novamente
+            close(sock); 
             sleep(1);
             while ((sock = criar_socket()) < 0) {
                 perror("Erro ao recriar socket após falha de conexão. Tentando novamente...");
@@ -106,7 +115,7 @@ int main() {
     // while (TRUE)
     // {      
     //     memset(tab_reg, 0, sizeof(tab_reg)); 
-    //     ctx = modbus_new_tcp(p.targetHost, 502);
+    //     ctx = modbus_new_tcp(p.targetHost, cfg->portaModbus);
 
     //     if (ctx == NULL) {
     //         fprintf(stderr, "Erro ao criar contexto Modbus: %s\n", modbus_strerror(errno));
@@ -193,30 +202,32 @@ int enviar_pacote(int sock, Parametros *p) {
     }
 }
 
-int ler_config(const char *filename, Parametros *p, char ***hosts, int *numHosts) {
+int ler_config(const char *filename, Config *cfg, Parametros *p, char ***hosts, int *numHosts) {
     FILE *f = fopen(filename, "rb");
     if (!f) {
         perror("Erro ao abrir config.json");
         return -1;
     }
+
     fseek(f, 0, SEEK_END);
     long len = ftell(f);
     rewind(f);
+
     char *data = malloc(len + 1);
     if (!data) {
         fprintf(stderr, "Erro ao alocar memória\n");
         fclose(f);
         return -1;
     }
+
     size_t read_bytes = fread(data, 1, len, f);
+    fclose(f);
     if (read_bytes != (size_t)len) {
         fprintf(stderr, "Erro ao ler arquivo de configuração\n");
         free(data);
-        fclose(f);
         return -1;
     }
     data[len] = '\0';
-    fclose(f);
 
     cJSON *json = cJSON_Parse(data);
     free(data);
@@ -225,30 +236,99 @@ int ler_config(const char *filename, Parametros *p, char ***hosts, int *numHosts
         return -1;
     }
 
-    cJSON *param = cJSON_GetObjectItem(json, "parametros");
-    if (!param) { cJSON_Delete(json); return -1; }
+    // ------------------ Lê o bloco "config" ------------------
+    cJSON *config = cJSON_GetObjectItem(json, "config");
+    if (!cJSON_IsObject(config)) {
+        fprintf(stderr, "Campo 'config' ausente ou inválido\n");
+        cJSON_Delete(json);
+        return -1;
+    }
 
-    // Corrige o uso do strncpy para garantir terminação nula
-    strncpy(p->targetHost, cJSON_GetObjectItem(param, "targetHost")->valuestring, sizeof(p->targetHost) - 1);
+    cJSON *portaServ = cJSON_GetObjectItem(config, "portaServidor");
+    cJSON *portaMod = cJSON_GetObjectItem(config, "portaModbus");
+    cJSON *coils = cJSON_GetObjectItem(config, "coils");
+
+    if (!cJSON_IsNumber(portaServ) || !cJSON_IsNumber(portaMod) || !cJSON_IsNumber(coils)) {
+        fprintf(stderr, "Valores inválidos em 'config'\n");
+        cJSON_Delete(json);
+        return -1;
+    }
+
+    cfg->portaServidor = portaServ->valueint;
+    cfg->portaModbus   = portaMod->valueint;
+    cfg->coils         = coils->valueint;
+
+    // ------------------ Lê o bloco "parametros" ------------------
+    cJSON *param = cJSON_GetObjectItem(json, "parametros");
+    if (!cJSON_IsObject(param)) {
+        fprintf(stderr, "Campo 'parametros' ausente ou inválido\n");
+        cJSON_Delete(json);
+        return -1;
+    }
+
+    cJSON *hostItem = cJSON_GetObjectItem(param, "targetHost");
+    if (!cJSON_IsString(hostItem)) goto erro_param;
+    strncpy(p->targetHost, hostItem->valuestring, sizeof(p->targetHost) - 1);
     p->targetHost[sizeof(p->targetHost) - 1] = '\0';
 
-    p->startTime = cJSON_GetObjectItem(param, "startTime")->valueint;
-    p->floodingPeriod = cJSON_GetObjectItem(param, "floodingPeriod")->valueint;
-    p->timeoutAtk = cJSON_GetObjectItem(param, "timeoutAtk")->valuedouble;
-    p->delayBtwRequestsAtk = cJSON_GetObjectItem(param, "delayBtwRequestsAtk")->valueint;
-    const char *op = cJSON_GetObjectItem(param, "operation")->valuestring;
-    p->operation = (strcmp(op, "READ") == 0) ? READ : WRITE;
+    cJSON *start = cJSON_GetObjectItem(param, "startTime");
+    cJSON *period = cJSON_GetObjectItem(param, "floodingPeriod");
+    cJSON *timeout = cJSON_GetObjectItem(param, "timeoutAtk");
+    cJSON *delay = cJSON_GetObjectItem(param, "delayBtwRequestsAtk");
+    cJSON *op = cJSON_GetObjectItem(param, "operation");
 
+    if (!cJSON_IsNumber(start) || !cJSON_IsNumber(period) ||
+        !cJSON_IsNumber(timeout) || !cJSON_IsNumber(delay) || !cJSON_IsString(op)) {
+        goto erro_param;
+    }
+
+    p->startTime = start->valueint;
+    p->floodingPeriod = period->valueint;
+    p->timeoutAtk = timeout->valuedouble;
+    p->delayBtwRequestsAtk = delay->valueint;
+    p->operation = (strcmp(op->valuestring, "READ") == 0) ? READ : WRITE;
+
+    // ------------------ Lê o bloco "hostAttackers" ------------------
     cJSON *arr = cJSON_GetObjectItem(json, "hostAttackers");
+    if (!cJSON_IsArray(arr)) {
+        fprintf(stderr, "Campo 'hostAttackers' ausente ou inválido\n");
+        goto erro_json;
+    }
+
     *numHosts = cJSON_GetArraySize(arr);
     *hosts = malloc(sizeof(char*) * (*numHosts));
+    if (!*hosts) {
+        fprintf(stderr, "Erro ao alocar memória para hosts\n");
+        goto erro_json;
+    }
+
     for (int i = 0; i < *numHosts; i++) {
         cJSON *item = cJSON_GetArrayItem(arr, i);
+        if (!cJSON_IsString(item)) {
+            fprintf(stderr, "Host inválido no índice %d\n", i);
+            goto erro_hosts;
+        }
         (*hosts)[i] = strdup(item->valuestring);
+        if (!(*hosts)[i]) {
+            fprintf(stderr, "Erro ao duplicar host\n");
+            goto erro_hosts;
+        }
     }
 
     cJSON_Delete(json);
     return 0;
+
+erro_hosts:
+    for (int i = 0; i < *numHosts; i++) {
+        if ((*hosts)[i]) free((*hosts)[i]);
+    }
+    free(*hosts);
+    *hosts = NULL;
+erro_param:
+    fprintf(stderr, "Erro ao extrair campos de 'parametros'\n");
+erro_json:
+    cJSON_Delete(json);
+    return -1;
 }
 
 // uint64_t get_current_time_ms() {

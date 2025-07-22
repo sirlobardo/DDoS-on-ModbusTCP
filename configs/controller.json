@@ -1,6 +1,11 @@
 {
+  "config": {
+    "portaServidor": 12345,
+    "portaModbus": 502,
+    "coils": 10
+  },
   "parametros": {
-    "targetHost": "192.168.68.101",
+    "targetHost": "192.168.68.105",
     "startTime": 5000000,
     "floodingPeriod": 20000000,
     "timeoutAtk": 500000,
