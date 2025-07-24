@@ -94,35 +94,35 @@ int main() {
     unsigned int delayBtwRequestsLegalQuerier = p.delayBtwRequestsAtk;
     const uint32_t timeoutLegalQuerier = 1000;
 
-    // for (int i = 0; i < numAttackers; i++) {
-    //     struct sockaddr_in server;
+    for (int i = 0; i < numAttackers; i++) {
+        struct sockaddr_in server;
 
-    //     while ((sock = criar_socket()) < 0) {
-    //         perror("Erro ao criar socket. Tentando novamente...");
-    //         sleep(1); // evita uso excessivo da CPU
-    //     }
+        while ((sock = criar_socket()) < 0) {
+            perror("Erro ao criar socket. Tentando novamente...");
+            sleep(1); // evita uso excessivo da CPU
+        }
 
-    //     while (conectar_servidor(sock, hostAttackers[i], cfg.portaServidor, &server) < 0) {
-    //         perror("Erro ao conectar com o servidor. Tentando novamente...");
-    //         close(sock); 
-    //         sleep(1);
-    //         while ((sock = criar_socket()) < 0) {
-    //             perror("Erro ao recriar socket após falha de conexão. Tentando novamente...");
-    //             sleep(1);
-    //         }
-    //     }
+        while (conectar_servidor(sock, hostAttackers[i], cfg.portaServidor, &server) < 0) {
+            perror("Erro ao conectar com o servidor. Tentando novamente...");
+            close(sock); 
+            sleep(1);
+            while ((sock = criar_socket()) < 0) {
+                perror("Erro ao recriar socket após falha de conexão. Tentando novamente...");
+                sleep(1);
+            }
+        }
 
-    //     while (enviar_pacote(sock, &p) < 0) {
-    //         perror("Erro ao enviar pacote. Tentando novamente...");
-    //         sleep(1);
-    //     }
+        while (enviar_pacote(sock, &p) < 0) {
+            perror("Erro ao enviar pacote. Tentando novamente...");
+            sleep(1);
+        }
 
-    //     close(sock);
-    //     free(hostAttackers[i]);
-    // }
+        close(sock);
+        free(hostAttackers[i]);
+    }
 
-    // free(hostAttackers);
-    // printf("Pacotes enviados com sucesso para todos os atacantes.\n");
+    free(hostAttackers);
+    printf("Pacotes enviados com sucesso para todos os atacantes.\n");
     
     while (TRUE)
     {      
