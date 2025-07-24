@@ -92,7 +92,7 @@ int main() {
     uint64_t startExecTime = get_current_time_ms();
     uint64_t endOfExperiment = startExecTime + p.floodingPeriod;
     unsigned int delayBtwRequestsLegalQuerier = p.delayBtwRequestsAtk;
-    uint32_t timeoutLegalQuerier = p.timeoutAtk / 1000.0;
+    const uint32_t timeoutLegalQuerier = 1000;
 
     // for (int i = 0; i < numAttackers; i++) {
     //     struct sockaddr_in server;
