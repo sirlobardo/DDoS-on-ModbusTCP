@@ -34,8 +34,8 @@
 
 #define array_length(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define TARGET_HOST_MAXLEN 20
-// #define TRUE 1
-// #define BIT_MASK 0x01
+#define TRUE 1
+#define BIT_MASK 0x01
 
 typedef struct {
     int portaServidor;
@@ -61,8 +61,8 @@ int criar_socket();
 int conectar_servidor(int sock, const char *ip, int porta, struct sockaddr_in *server_addr);
 int enviar_pacote(int sock, Parametros *p);
 int ler_config(const char *filename, Config *cfg, Parametros *p, char ***hosts, int *numHosts);
-// uint64_t get_current_time_ms();
-// void preencher_tab_reg_aleatorio(uint8_t *tab_reg, size_t tamanho);
+uint64_t get_current_time_ms();
+void preencher_tab_reg_aleatorio(uint8_t *tab_reg, size_t tamanho);
 
 int main() {
     Parametros p;
@@ -76,11 +76,12 @@ int main() {
     }
 
 
-    // modbus_t *ctx;
-    // uint8_t tab_reg[cfg.coils];
-    // uint64_t startExecTime = get_current_time_ms();
-
-
+    modbus_t *ctx;
+    uint8_t tab_reg[cfg.coils];
+    uint64_t startExecTime = get_current_time_ms();
+    uint64_t endOfExperiment = startExecTime + p.floodingPeriod;
+    unsigned int delayBtwRequestsLegalQuerier = p.delayBtwRequestsAtk;
+    uint32_t timeoutLegalQuerier = p.timeoutAtk / 1000.0;
 
     for (int i = 0; i < numAttackers; i++) {
         struct sockaddr_in server;
@@ -112,49 +113,49 @@ int main() {
     free(hostAttackers);
     printf("Pacotes enviados com sucesso para todos os atacantes.\n");
     
-    // while (TRUE)
-    // {      
-    //     memset(tab_reg, 0, sizeof(tab_reg)); 
-    //     ctx = modbus_new_tcp(p.targetHost, cfg->portaModbus);
+    while (TRUE)
+    {      
+        memset(tab_reg, 0, sizeof(tab_reg)); 
+        ctx = modbus_new_tcp(p.targetHost, cfg.portaModbus);
 
-    //     if (ctx == NULL) {
-    //         fprintf(stderr, "Erro ao criar contexto Modbus: %s\n", modbus_strerror(errno));
-    //         sleep(1); 
-    //         continue;
-    //     }
+        if (ctx == NULL) {
+            fprintf(stderr, "Erro ao criar contexto Modbus: %s\n", modbus_strerror(errno));
+            sleep(1); 
+            continue;
+        }
 
-    //     modbus_set_response_timeout(ctx, &timeoutLegalQuerier);
+        modbus_set_response_timeout(ctx, 0, timeoutLegalQuerier);
 
-    //     if (modbus_connect(ctx) == -1) {
-    //         fprintf(stderr, "Falha ao conectar: %s\n", modbus_strerror(errno));
-    //         modbus_free(ctx);
-    //         sleep(1); 
-    //         continue;
-    //     }
+        if (modbus_connect(ctx) == -1) {
+            fprintf(stderr, "Falha ao conectar: %s\n", modbus_strerror(errno));
+            modbus_free(ctx);
+            sleep(1); 
+            continue;
+        }
 
-    //     while (get_current_time_ms() - startExecTime < endOfExperiment) {
-    //         printf("Enviando pacote Modbus...\n");
-    //         if (p.operation == READ) {
-    //             rslt = modbus_read_bits(ctx, 0, array_length(tab_reg), tab_reg);
-    //             if (rslt == -1) {
-    //                 fprintf(stderr, "Erro em modbus_read_bits: %s\n", modbus_strerror(errno));
-    //                 continue;; 
-    //             }
-    //         } else if (p.operation == WRITE) {
-    //             preencher_tab_reg_aleatorio(tab_reg, array_length(tab_reg));
-    //             rslt = modbus_write_bits(ctx, 0, array_length(tab_reg), tab_reg);
-    //             if (rslt == -1) {
-    //                 fprintf(stderr, "Erro em modbus_write_bits: %s\n", modbus_strerror(errno));
-    //                 continue;; 
-    //             }
-    //         }
+        while (get_current_time_ms() - startExecTime < endOfExperiment) {
+            printf("Enviando pacote Modbus...\n");
+            if (p.operation == READ) {
+                rslt = modbus_read_bits(ctx, 0, array_length(tab_reg), tab_reg);
+                if (rslt == -1) {
+                    fprintf(stderr, "Erro em modbus_read_bits: %s\n", modbus_strerror(errno));
+                    continue;; 
+                }
+            } else if (p.operation == WRITE) {
+                preencher_tab_reg_aleatorio(tab_reg, array_length(tab_reg));
+                rslt = modbus_write_bits(ctx, 0, array_length(tab_reg), tab_reg);
+                if (rslt == -1) {
+                    fprintf(stderr, "Erro em modbus_write_bits: %s\n", modbus_strerror(errno));
+                    continue;; 
+                }
+            }
 
-    //         sleep(delayBtwRequestsLegalQuerier);
-    //     }
-    //     modbus_close(ctx);
-    //     modbus_free(ctx);
-    //     printf("Conexão Modbus fechada.\n");
-    // }
+            sleep(delayBtwRequestsLegalQuerier);
+        }
+        modbus_close(ctx);
+        modbus_free(ctx);
+        printf("Conexão Modbus fechada.\n");
+    }
     
     return 0;
 }
@@ -331,34 +332,34 @@ erro_json:
     return -1;
 }
 
-// uint64_t get_current_time_ms() {
-//     struct timespec ts;
-//     clock_gettime(CLOCK_MONOTONIC, &ts);
-//     return (uint64_t)(ts.tv_sec) * 1000 + (ts.tv_nsec / 1000000);
-// }
+uint64_t get_current_time_ms() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)(ts.tv_sec) * 1000 + (ts.tv_nsec / 1000000);
+}
 
-// void preencher_tab_reg_aleatorio(uint8_t *tab_reg, size_t tamanho) {
-//     int fd = open("/dev/urandom", O_RDONLY);
-//     if (fd < 0) {
-//         perror("Erro ao abrir /dev/urandom");
-//         // fallback para rand()
-//         for (size_t i = 0; i < tamanho; i++) {
-//             tab_reg[i] = rand() % 2;
-//         }
-//         return;
-//     }
-//     ssize_t lidos = read(fd, tab_reg, tamanho);
-//     if (lidos < 0) {
-//         perror("Erro ao ler /dev/urandom");
-//         // fallback para rand()
-//         for (size_t i = 0; i < tamanho; i++) {
-//             tab_reg[i] = rand() % 2;
-//         }
-//         close(fd);
-//         return;
-//     }
-//     for (size_t i = 0; i < tamanho; i++) {
-//         tab_reg[i] = tab_reg[i] & BIT_MASK;
-//     }
-//     close(fd);
-// }
+void preencher_tab_reg_aleatorio(uint8_t *tab_reg, size_t tamanho) {
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd < 0) {
+        perror("Erro ao abrir /dev/urandom");
+        // fallback para rand()
+        for (size_t i = 0; i < tamanho; i++) {
+            tab_reg[i] = rand() % 2;
+        }
+        return;
+    }
+    ssize_t lidos = read(fd, tab_reg, tamanho);
+    if (lidos < 0) {
+        perror("Erro ao ler /dev/urandom");
+        // fallback para rand()
+        for (size_t i = 0; i < tamanho; i++) {
+            tab_reg[i] = rand() % 2;
+        }
+        close(fd);
+        return;
+    }
+    for (size_t i = 0; i < tamanho; i++) {
+        tab_reg[i] = tab_reg[i] & BIT_MASK;
+    }
+    close(fd);
+}
