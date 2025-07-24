@@ -36,6 +36,7 @@
 #define TARGET_HOST_MAXLEN 20
 #define TRUE 1
 #define BIT_MASK 0x01
+#define LOG_FILE "../logs/modbus_log.csv"
 
 typedef struct {
     int portaServidor;
@@ -63,12 +64,22 @@ int enviar_pacote(int sock, Parametros *p);
 int ler_config(const char *filename, Config *cfg, Parametros *p, char ***hosts, int *numHosts);
 uint64_t get_current_time_ms();
 void preencher_tab_reg_aleatorio(uint8_t *tab_reg, size_t tamanho);
+void salvar_log_csv(const char *arquivo, const char *operacao, const char *status);
 
 int main() {
+    FILE *fp = fopen(LOG_FILE, "r");
+    if (!fp) {
+        fp = fopen(LOG_FILE, "w");
+        if (fp) {
+            fprintf(fp, "\"timestamp\",\"operacao\",\"status\"\n");
+            fclose(fp);
+        }
+    }
+
     Parametros p;
     Config cfg;
     char **hostAttackers = NULL;
-    int numAttackers = 0, sock, rslt;
+    int numAttackers = 0, sock;
 
     if (ler_config("../configs/controller.json", &cfg, &p, &hostAttackers, &numAttackers) != 0) {
         fprintf(stderr, "Erro ao ler configuração do arquivo JSON.\n");
@@ -83,35 +94,35 @@ int main() {
     unsigned int delayBtwRequestsLegalQuerier = p.delayBtwRequestsAtk;
     uint32_t timeoutLegalQuerier = p.timeoutAtk / 1000.0;
 
-    for (int i = 0; i < numAttackers; i++) {
-        struct sockaddr_in server;
+    // for (int i = 0; i < numAttackers; i++) {
+    //     struct sockaddr_in server;
 
-        while ((sock = criar_socket()) < 0) {
-            perror("Erro ao criar socket. Tentando novamente...");
-            sleep(1); // evita uso excessivo da CPU
-        }
+    //     while ((sock = criar_socket()) < 0) {
+    //         perror("Erro ao criar socket. Tentando novamente...");
+    //         sleep(1); // evita uso excessivo da CPU
+    //     }
 
-        while (conectar_servidor(sock, hostAttackers[i], cfg.portaServidor, &server) < 0) {
-            perror("Erro ao conectar com o servidor. Tentando novamente...");
-            close(sock); 
-            sleep(1);
-            while ((sock = criar_socket()) < 0) {
-                perror("Erro ao recriar socket após falha de conexão. Tentando novamente...");
-                sleep(1);
-            }
-        }
+    //     while (conectar_servidor(sock, hostAttackers[i], cfg.portaServidor, &server) < 0) {
+    //         perror("Erro ao conectar com o servidor. Tentando novamente...");
+    //         close(sock); 
+    //         sleep(1);
+    //         while ((sock = criar_socket()) < 0) {
+    //             perror("Erro ao recriar socket após falha de conexão. Tentando novamente...");
+    //             sleep(1);
+    //         }
+    //     }
 
-        while (enviar_pacote(sock, &p) < 0) {
-            perror("Erro ao enviar pacote. Tentando novamente...");
-            sleep(1);
-        }
+    //     while (enviar_pacote(sock, &p) < 0) {
+    //         perror("Erro ao enviar pacote. Tentando novamente...");
+    //         sleep(1);
+    //     }
 
-        close(sock);
-        free(hostAttackers[i]);
-    }
+    //     close(sock);
+    //     free(hostAttackers[i]);
+    // }
 
-    free(hostAttackers);
-    printf("Pacotes enviados com sucesso para todos os atacantes.\n");
+    // free(hostAttackers);
+    // printf("Pacotes enviados com sucesso para todos os atacantes.\n");
     
     while (TRUE)
     {      
@@ -136,22 +147,25 @@ int main() {
         while (get_current_time_ms() - startExecTime < endOfExperiment) {
             printf("Enviando pacote Modbus...\n");
             if (p.operation == READ) {
-                rslt = modbus_read_bits(ctx, 0, array_length(tab_reg), tab_reg);
-                if (rslt == -1) {
+                if (modbus_read_bits(ctx, 0, array_length(tab_reg), tab_reg) == -1) {
                     fprintf(stderr, "Erro em modbus_read_bits: %s\n", modbus_strerror(errno));
-                    continue;; 
+                    salvar_log_csv(LOG_FILE, "READ", "ERRO");
+                    continue;
                 }
+                else salvar_log_csv(LOG_FILE, "READ", "SUCESSO");
             } else if (p.operation == WRITE) {
                 preencher_tab_reg_aleatorio(tab_reg, array_length(tab_reg));
-                rslt = modbus_write_bits(ctx, 0, array_length(tab_reg), tab_reg);
-                if (rslt == -1) {
+                if (modbus_write_bits(ctx, 0, array_length(tab_reg), tab_reg) == -1) {
                     fprintf(stderr, "Erro em modbus_write_bits: %s\n", modbus_strerror(errno));
-                    continue;; 
+                    salvar_log_csv(LOG_FILE, "WRITE", "ERRO");
+                    continue;
                 }
+                else salvar_log_csv(LOG_FILE, "WRITE", "SUCESSO");
             }
 
             sleep(delayBtwRequestsLegalQuerier);
         }
+
         modbus_close(ctx);
         modbus_free(ctx);
         printf("Conexão Modbus fechada.\n");
@@ -362,4 +376,20 @@ void preencher_tab_reg_aleatorio(uint8_t *tab_reg, size_t tamanho) {
         tab_reg[i] = tab_reg[i] & BIT_MASK;
     }
     close(fd);
+}
+
+void salvar_log_csv(const char *arquivo, const char *operacao, const char *status) {
+    FILE *fp = fopen(arquivo, "a");
+    if (!fp) {
+        perror("Erro ao abrir arquivo de log CSV");
+        return;
+    }
+
+    time_t agora = time(NULL);
+    struct tm *infoTempo = localtime(&agora);
+    char horario[64];
+    strftime(horario, sizeof(horario), "%Y-%m-%d %H:%M:%S", infoTempo);
+
+    fprintf(fp, "\"%s\",\"%s\",\"%s\"\n", horario, operacao, status);
+    fclose(fp);
 }

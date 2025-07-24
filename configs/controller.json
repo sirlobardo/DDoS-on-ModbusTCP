@@ -5,7 +5,7 @@
     "coils": 10
   },
   "parametros": {
-    "targetHost": "192.168.68.105",
+    "targetHost": "192.168.0.1",
     "startTime": 5000000,
     "floodingPeriod": 20000000,
     "timeoutAtk": 500000,
